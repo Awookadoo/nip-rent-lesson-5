@@ -1,4 +1,4 @@
-from src.models import Apartment, Bill, Parameters, Tenant, Transfer
+from src.models import Apartment, Bill, Parameters, Tenant, Transfer, ApartmentSettlement
 
 
 class Manager:
@@ -41,3 +41,23 @@ class Manager:
                 if bill.apartment == apartment_key and bill.settlement_month == month and bill.settlement_year == year:
                     costs += bill.amount_pln
         return costs
+
+    def get_tenant_rent(self, apartment_key):
+        rent = 0
+        for tenant in self.tenants.values:
+            if tenant.apartment == apartment_key:
+                rent += tenant.rent_pln
+        return rent
+    
+    def bilans(self, apartment_key, year, month):
+        bills = self.get_apartment_costs(apartment_key, year, month)
+        rent = self.get_tenant_rent(apartment_key)
+        
+        return ApartmentSettlement(
+            apartment_key= apartment_key,
+            year=year,
+            month=month,
+            total_bills_pln = bills,
+            total_rent_pln = rent,
+            total_due_pln = rent + bills
+        )
