@@ -1,4 +1,4 @@
-from src.models import Apartment, Bill, Parameters, Tenant, Transfer, ApartmentSettlement
+from src.models import Apartment, Bill, Parameters, Tenant, Transfer, ApartmentSettlement, TenantSettlement
 
 
 class Manager:
@@ -44,20 +44,90 @@ class Manager:
 
     def get_tenant_rent(self, apartment_key):
         rent = 0
-        for tenant in self.tenants.values:
+        for tenant in self.tenants.values():
             if tenant.apartment == apartment_key:
                 rent += tenant.rent_pln
+
         return rent
-    
+
+    def get_apartment_transfers(self, apartment_key, year=0, month=0):
+        if apartment_key not in self.apartments:
+            return None
+
+        transfers_sum = 0
+        for transfer in self.transfers:
+            tenant_obj = self.tenants.get(transfer.tenant)
+            if not tenant_obj or tenant_obj.apartment != apartment_key:
+                continue
+
+            if year == 0:
+                transfers_sum += transfer.amount_pln
+            elif month == 0 and transfer.settlement_year == year:
+                transfers_sum += transfer.amount_pln
+            elif transfer.settlement_year == year and transfer.settlement_month == month:
+                transfers_sum += transfer.amount_pln
+
+        return transfers_sum
+
+    def create_apartment_settlement(self, apartment_key, year, month):
+        if apartment_key not in self.apartments:
+            return None
+
+        bills = self.get_apartment_costs(apartment_key, year, month)
+        transfers = self.get_apartment_transfers(apartment_key, year, month)
+
+        if bills is None or transfers is None:
+            return None
+
+        balance = transfers - bills
+
+        return ApartmentSettlement(
+            apartment=apartment_key,
+            year=year,
+            month=month,
+            total_rent_pln=transfers,
+            total_bills_pln=bills,
+            total_due_pln=balance
+        )
+
     def bilans(self, apartment_key, year, month):
         bills = self.get_apartment_costs(apartment_key, year, month)
         rent = self.get_tenant_rent(apartment_key)
-        
+
         return ApartmentSettlement(
-            apartment_key= apartment_key,
+            apartment=apartment_key,
             year=year,
             month=month,
-            total_bills_pln = bills,
-            total_rent_pln = rent,
-            total_due_pln = rent + bills
+            total_bills_pln=bills,
+            total_rent_pln=rent,
+            total_due_pln=rent + bills
         )
+
+    def create_tenant_settlements_from_apartment_settlement(self, apartment_settlement):
+        if not apartment_settlement:
+            return []
+
+        apartment_key = apartment_settlement.apartment
+        if apartment_key not in self.apartments:
+            return []
+
+        tenants = [t for t in self.tenants.values() if t.apartment == apartment_key]
+        if not tenants:
+            return []
+
+        per_tenant_bills = apartment_settlement.total_bills_pln / len(tenants)
+        results = []
+
+        for tenant in tenants:
+            results.append(TenantSettlement(
+                tenant=tenant.name,
+                apartment_settlement=apartment_key,
+                month=apartment_settlement.month,
+                year=apartment_settlement.year,
+                rent_pln=tenant.rent_pln,
+                bills_pln=per_tenant_bills,
+                total_due_pln=-per_tenant_bills,
+                balance_pln=-per_tenant_bills
+            ))
+
+        return results
